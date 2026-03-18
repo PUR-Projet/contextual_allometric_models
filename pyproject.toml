@@ -1,0 +1,30 @@
+[tool.black]
+line-length = 150
+target-version = ['py314']
+skip-string-normalization = false  # Normalize quote characters
+skip-magic-trailing-comma = false  # Automatically add a trailing comma when breaking long lines inside collections
+
+[tool.poetry]
+name = "paper"
+version = "0.1.0"
+description = ""
+authors = ["Eustache Diemert <eustache.diemert@pur.co>", "Anaëlle Dambreville <anaelle.dambreville@pur.co>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11.14"
+pandas = "^2.2.3"
+scikit-learn = "^1.7.0"
+black = "^25.1.0"
+scipy = "^1.15.2"
+torch = "^2.7.1"
+lightning = "^2.5.1"
+torch-metrics = "^1.1.7"
+matplotlib = "^3.10.1"
+jupyter = "^1.1.1"
+notebook = "^7.4.5"
+scikit-optimize = "^0.10.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
