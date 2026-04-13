@@ -59,3 +59,14 @@ test R2: 0.8369188393170234
 ```
 
 The code outputs Figure 5 of the paper as [bound_results.png](bound_results.png) and Table 2 as [bound_results.tex](bound_results.tex). 
+
+## Carbon Emissions of this Research
+
+We estimate carbon emissions of this research using the [CodeCarbon](https://codecarbon.io/) project. Experiments were launched on an Apple M3 laptop in France.
+
+The final run of the two contributions entail
+  - 1.1896 g CO2eq (contextual pan-tropical model)
+  - 0.0062 g CO2eq (transfer error model)
+as measured by CodeCarbon v.3.2.6.
+
+
