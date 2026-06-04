@@ -42,9 +42,19 @@ class TabularDataset(utils.data.Dataset):
 
     def __getitem__(self, i):
         if self.z is None:
-            return self.X[i, :], self.y[i].reshape(1,)
+            return self.X[i, :], self.y[i].reshape(
+                1,
+            )
         else:
-            return self.X[i, :], self.y[i].reshape(1, ), self.z[i].reshape(1,)
+            return (
+                self.X[i, :],
+                self.y[i].reshape(
+                    1,
+                ),
+                self.z[i].reshape(
+                    1,
+                ),
+            )
 
 
 class GradNormMixin:
@@ -211,7 +221,7 @@ def bucketize(y, quantiles=np.array([0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99])):
     return agb_classes
 
 
-def to_xy(dff, rich_features: bool = True):
+def to_xy(dff, rich_features: bool = True, return_col: str | None = None):
     if rich_features:
         dff = dff[~np.isnan(dff["OldGrowth"])]
     Xnum = dff[["DBH", "H", "WD"]].values
@@ -229,7 +239,8 @@ def to_xy(dff, rich_features: bool = True):
     else:
         X = np.hstack([Xnum, Xcontinent])
     y = dff.AGB.values
-    return X, y
+    col_values = dff[return_col].values if return_col else None
+    return X, y, col_values
 
 
 class HGBRT(HistGradientBoostingRegressor):
@@ -586,15 +597,27 @@ class Evaluator:
 
 
 def evaluate_one_data_split(df, split_id, args, result_data, raw_data):
-    X, y = to_xy(df, args.rich_features)
+    X, y, _ = to_xy(df, args.rich_features)
     agb_classes = bucketize(y)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=args.test_size,
-        random_state=split_id,
-        stratify=agb_classes,
-    )
+    if args.cross_val == "random":
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=args.test_size,
+            random_state=split_id,
+            stratify=agb_classes,
+        )
+    elif args.cross_val == "one-site-out":
+        X, y, site_values = to_xy(df, args.rich_features, "S")
+        X_train = X[site_values != split_id]
+        y_train = y[site_values != split_id]
+        X_test = X[site_values == split_id]
+        y_test = y[site_values == split_id]
+        if len(y_test) == 0:
+            print(f"Skipping {split_id} split because it has no sample.")
+            return
+    else:
+        raise ValueError("Unsupported cross-validation strategy:", args.cross_val)
     print(">>> Train Size:", len(y_train), "Test Size:", len(y_test))
     print(">>> Max AGB Train:", max(y_train), "Max AGB Test:", max(y_test))
 
@@ -652,7 +675,7 @@ def eval_chave_baseline(X_test, X_train, y_test, y_train, split_id, result_data,
 
 
 def write_results_summary(result_df, fd=sys.stdout, latex_fn=None):
-    n = result_df.split.max() + 1
+    n = result_df.split.max() + 1 if type(result_df.split.max()) == int else len(result_df.split.unique())
     latex_preamble = r"""
     \begin{tabular}{lllr}
     \toprule
@@ -661,7 +684,7 @@ def write_results_summary(result_df, fd=sys.stdout, latex_fn=None):
     """
     latex = latex_preamble
     print("*" * 80, file=fd)
-    print(f"\t Random Train/Test Splits: {n}", file=fd)
+    print(f"\t Train/Test Splits: {n}", file=fd)
     print("-" * 80, file=fd)
     for prefix in ("train", "test"):
         for metric in ("rmse", "mae", "r2"):
@@ -728,6 +751,7 @@ def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--n-runs", "-r", type=int, default=30)
     parser.add_argument("--test-size", "-ts", type=float, default=0.2)
+    parser.add_argument("--cross-val", "-cv", choices=["one-site-out", "random"], default="random")
 
     parser.add_argument("--rich-features", "-ff", action="store_true", default=True)
     parser.add_argument("--no-rich-features", "-nrf", action="store_false", dest="rich_features")
@@ -763,9 +787,15 @@ if __name__ == "__main__":
     result_data = defaultdict(list)
     raw_data = defaultdict(lambda: defaultdict(dict))
 
-    for j in range(args.n_runs):
+    if args.cross_val == "random":
+        cv_runs = range(args.n_runs)
+        run_info = "RUN "
+    else:
+        cv_runs = df.S.unique()
+        run_info = "LEAVE OUT "
+    for j in cv_runs:
         print("*" * 80)
-        print("RUN", j)
+        print(f"{run_info}{j}")
         print("*" * 80)
         evaluate_one_data_split(df, j, args, result_data, raw_data)
         report(result_data)
