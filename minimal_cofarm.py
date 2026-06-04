@@ -442,7 +442,7 @@ class Evaluator:
         print(model.nb_parameters(), "parameters")
 
         if isinstance(model, nn.Module):
-            y_test_hat, y_train_hat = self.train_pytorch_model(X_test, X_train, model, y_train, self.checkpoint)
+            y_test_hat, y_train_hat = self.train_pytorch_model(X_test, X_train, model, y_train, self.checkpoint, args.max_epochs_scale_factor)
         else:
             if args.optimize:
                 model = self.optimize_hyperparams(model, X_train, y_train)
@@ -474,7 +474,7 @@ class Evaluator:
         return search.best_estimator_  # Already fitted
 
     @staticmethod
-    def train_pytorch_model(X_test, X_train, model: nn.Module, y_train, checkpoint: bool = False):
+    def train_pytorch_model(X_test, X_train, model: nn.Module, y_train, checkpoint: bool = False, max_epochs_scaling_factor: float = 1.0):
         X = np.vstack([X_train, X_test])
         y = np.hstack([y_train, np.zeros(len(X_test))])
         is_train_idx = np.hstack([np.ones(len(X_train)), np.zeros(len(X_test))])
@@ -560,7 +560,7 @@ class Evaluator:
 
             last_loss = loss.item()
 
-            if epoch > model.epochs:
+            if epoch > model.epochs * max_epochs_scaling_factor:
                 print("max epochs reached")
                 stop = True
 
@@ -601,15 +601,27 @@ class Evaluator:
 
 
 def evaluate_one_data_split(df, split_id, args, result_data, raw_data):
-    X, y = to_xy(df, args.rich_features)
+    X, y, _ = to_xy(df, args.rich_features)
     agb_classes = bucketize(y)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=args.test_size,
-        random_state=split_id,
-        stratify=agb_classes,
-    )
+    if args.cross_val == "random":
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size = args.test_size,
+            random_state = split_id,
+            stratify = agb_classes,
+        )
+    elif args.cross_val == "one-site-out":
+        X, y, site_values = to_xy(df, args.rich_features, "S")
+        X_train = X[site_values != split_id]
+        y_train = y[site_values != split_id]
+        X_test = X[site_values == split_id]
+        y_test = y[site_values == split_id]
+        if len(y_test) == 0:
+            print(f"Skipping {split_id} split because it has no sample.")
+            return
+    else:
+        raise ValueError("Unsupported cross-validation strategy:", args.cross_val)
     print(">>> Train Size:", len(y_train), "Test Size:", len(y_test))
     print(">>> Max AGB Train:", max(y_train), "Max AGB Test:", max(y_test))
 
@@ -625,7 +637,7 @@ def compute_metrics(y_train, y_train_hat, y_test_hat, y_test):
     train_r2 = sk_r2_score(y_train, y_train_hat)
     mae = np.abs(y_test - y_test_hat).mean()
     rmse = np.sqrt(((y_test - y_test_hat) ** 2).mean())
-    r2 = sk_r2_score(y_test_hat, y_test)
+    r2 = sk_r2_score(y_test, y_test_hat)
     metrics = {
         "train_mae": train_mae,
         "train_rmse": train_rmse,
@@ -667,7 +679,7 @@ def eval_chave_baseline(X_test, X_train, y_test, y_train, split_id, result_data,
 
 
 def write_results_summary(result_df, fd=sys.stdout, latex_fn=None):
-    n = result_df.split.max() + 1
+    n = result_df.split.max() + 1 if type(result_df.split.max()) == int else len(result_df.split.unique())
     latex_preamble = r"""
     \begin{tabular}{lllr}
     \toprule
@@ -676,7 +688,7 @@ def write_results_summary(result_df, fd=sys.stdout, latex_fn=None):
     """
     latex = latex_preamble
     print("*" * 80, file=fd)
-    print(f"\t Random Train/Test Splits: {n}", file=fd)
+    print(f"\t {'Random' if type(result_df.split.max()) == int else 'Site'} Train/Test Splits: {n}", file=fd)
     print("-" * 80, file=fd)
     for prefix in ("train", "test"):
         for metric in ("rmse", "mae", "r2"):
@@ -743,11 +755,14 @@ def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--n-runs", "-r", type=int, default=30)
     parser.add_argument("--test-size", "-ts", type=float, default=0.2)
+    parser.add_argument("--cross-val", "-cv", choices=["one-site-out", "random"], default="random")
 
     parser.add_argument("--rich-features", "-ff", action="store_true", default=True)
     parser.add_argument("--no-rich-features", "-nrf", action="store_false", dest="rich_features")
 
     parser.add_argument("--optimize", "-op", action="store_true")
+
+    parser.add_argument("--max-epochs-scale-factor", "-mesf", type=float, default=1.0)
 
     parser.add_argument(
         "--models",
@@ -778,9 +793,17 @@ if __name__ == "__main__":
     result_data = defaultdict(list)
     raw_data = defaultdict(lambda: defaultdict(dict))
 
-    for j in range(args.n_runs):
+    if args.cross_val == "random":
+        print(f"perform {args.n_runs} random train/test splits")
+        cv_runs = range(args.n_runs)
+        run_info = "RUN "
+    else:
+        cv_runs = df.S.unique()
+        print(f"perform {len(cv_runs)} leave-one-site-out splits")
+        run_info = "LEAVE OUT "
+    for j in cv_runs:
         print("*" * 80)
-        print("RUN", j)
+        print(f"{run_info}{j}")
         print("*" * 80)
         evaluate_one_data_split(df, j, args, result_data, raw_data)
         report(result_data)
