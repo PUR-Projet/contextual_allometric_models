@@ -238,7 +238,10 @@ def to_xy(dff, rich_features: bool = True, return_col: str | None = None):
         X = np.hstack([Xnum, Xcontinent, old_growth, forest_type, rainfall, altitude, drymonths])
     else:
         X = np.hstack([Xnum, Xcontinent])
-    y = dff.AGB.values
+    if "AGB" in dff.columns:
+        y = dff.AGB.values
+    else:
+        y = None
     col_values = dff[return_col].values if return_col else None
     return X, y, col_values
 
@@ -439,7 +442,7 @@ class Evaluator:
         print(model.nb_parameters(), "parameters")
 
         if isinstance(model, nn.Module):
-            y_test_hat, y_train_hat = self.train_pytorch_model(X_test, X_train, model, y_train)
+            y_test_hat, y_train_hat = self.train_pytorch_model(X_test, X_train, model, y_train, self.checkpoint)
         else:
             if args.optimize:
                 model = self.optimize_hyperparams(model, X_train, y_train)
@@ -470,7 +473,8 @@ class Evaluator:
             print(f"Best parameters: {search.best_params_}")
         return search.best_estimator_  # Already fitted
 
-    def train_pytorch_model(self, X_test, X_train, model: nn.Module, y_train):
+    @staticmethod
+    def train_pytorch_model(X_test, X_train, model: nn.Module, y_train, checkpoint: bool = False):
         X = np.vstack([X_train, X_test])
         y = np.hstack([y_train, np.zeros(len(X_test))])
         is_train_idx = np.hstack([np.ones(len(X_train)), np.zeros(len(X_test))])
@@ -544,12 +548,12 @@ class Evaluator:
                     )
                 if patience == 0:
                     stop = True
-                    if self.checkpoint:
+                    if checkpoint:
                         print("-> reloading best model weights from epoch", best_epoch, "loss:", best_loss)
                         model = torch.load("checkpoints/" + model.name + ".pt", weights_only=False)
             else:
                 patience = patience_amount
-                if loss.item() < best_loss and self.checkpoint:
+                if loss.item() < best_loss and checkpoint:
                     best_epoch = epoch
                     best_loss = loss.item()
                     torch.save(model, "checkpoints/" + model.name + ".pt")
@@ -597,27 +601,15 @@ class Evaluator:
 
 
 def evaluate_one_data_split(df, split_id, args, result_data, raw_data):
-    X, y, _ = to_xy(df, args.rich_features)
+    X, y = to_xy(df, args.rich_features)
     agb_classes = bucketize(y)
-    if args.cross_val == "random":
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=args.test_size,
-            random_state=split_id,
-            stratify=agb_classes,
-        )
-    elif args.cross_val == "one-site-out":
-        X, y, site_values = to_xy(df, args.rich_features, "S")
-        X_train = X[site_values != split_id]
-        y_train = y[site_values != split_id]
-        X_test = X[site_values == split_id]
-        y_test = y[site_values == split_id]
-        if len(y_test) == 0:
-            print(f"Skipping {split_id} split because it has no sample.")
-            return
-    else:
-        raise ValueError("Unsupported cross-validation strategy:", args.cross_val)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=args.test_size,
+        random_state=split_id,
+        stratify=agb_classes,
+    )
     print(">>> Train Size:", len(y_train), "Test Size:", len(y_test))
     print(">>> Max AGB Train:", max(y_train), "Max AGB Test:", max(y_test))
 
@@ -675,7 +667,7 @@ def eval_chave_baseline(X_test, X_train, y_test, y_train, split_id, result_data,
 
 
 def write_results_summary(result_df, fd=sys.stdout, latex_fn=None):
-    n = result_df.split.max() + 1 if type(result_df.split.max()) == int else len(result_df.split.unique())
+    n = result_df.split.max() + 1
     latex_preamble = r"""
     \begin{tabular}{lllr}
     \toprule
@@ -684,7 +676,7 @@ def write_results_summary(result_df, fd=sys.stdout, latex_fn=None):
     """
     latex = latex_preamble
     print("*" * 80, file=fd)
-    print(f"\t Train/Test Splits: {n}", file=fd)
+    print(f"\t Random Train/Test Splits: {n}", file=fd)
     print("-" * 80, file=fd)
     for prefix in ("train", "test"):
         for metric in ("rmse", "mae", "r2"):
@@ -751,7 +743,6 @@ def parse_args():
     parser = ArgumentParser()
     parser.add_argument("--n-runs", "-r", type=int, default=30)
     parser.add_argument("--test-size", "-ts", type=float, default=0.2)
-    parser.add_argument("--cross-val", "-cv", choices=["one-site-out", "random"], default="random")
 
     parser.add_argument("--rich-features", "-ff", action="store_true", default=True)
     parser.add_argument("--no-rich-features", "-nrf", action="store_false", dest="rich_features")
@@ -787,15 +778,9 @@ if __name__ == "__main__":
     result_data = defaultdict(list)
     raw_data = defaultdict(lambda: defaultdict(dict))
 
-    if args.cross_val == "random":
-        cv_runs = range(args.n_runs)
-        run_info = "RUN "
-    else:
-        cv_runs = df.S.unique()
-        run_info = "LEAVE OUT "
-    for j in cv_runs:
+    for j in range(args.n_runs):
         print("*" * 80)
-        print(f"{run_info}{j}")
+        print("RUN", j)
         print("*" * 80)
         evaluate_one_data_split(df, j, args, result_data, raw_data)
         report(result_data)
