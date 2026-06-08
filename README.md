@@ -21,9 +21,11 @@ Command to launch experiments:
 
 `poetry run python minimal_cofarm.py`
 
-Each baseline and proposed model will be run on the same 30 random train/test splits. This will take some time, depending on your computer.
+Each baseline and proposed model will be run on the same 30 random train/test splits. 
+This will take some time, depending on your computer.
 
-The code outputs a file `results_LogReg-LogReg-NN-COFARM-COFARM-NN-HGBRT-ContextualChave.csv` that contains all metrics for each model and confidence intervals. This corresponds to Table 3 of the paper.
+The code outputs a file `results_LogReg-LogReg-NN-COFARM-COFARM-NN-HGBRT-ContextualChave.csv` 
+that contains all metrics for each model and confidence intervals. This corresponds to Table 3 of the paper.
 
 ## Contribution #2 : Predicting Additional Estimation Error when applying Allometric Equation to New Sites
 
@@ -62,11 +64,11 @@ The code outputs Figure 5 of the paper as [bound_results.png](bound_results.png)
 
 ## How to use the models
 
-You can ask for AGB predictions from pre-trained models with the following command:
-`poetry run prediction.py -i example_input.csv -o example_output.csv`
+You can ask AGB predictions from pre-trained models with the following command:
+`poetry run python prediction.py -i example_input.csv -o example_output.csv`
 
 This will read `example_input.csv` with the same format as the [CSV file](chave.csv) from Chave et al and 
-write `example_output.csv`with the same columns and an `AGB` column that contains predictions from the model.
+write `example_output.csv`with the same columns plus an additional `AGB` column that contains predictions from the model.
 
 Mandatory columns are the following:
  - DBH (in cm)
@@ -90,7 +92,8 @@ By default the `COFARM-NN` model is used.
 
 ## Carbon Emissions of this Research
 
-We estimate carbon emissions of this research using the [CodeCarbon](https://codecarbon.io/) project. Experiments were launched on an Apple M3 laptop in France.
+We estimate carbon emissions of this research using the [CodeCarbon](https://codecarbon.io/) project. 
+Experiments were launched on an Apple M3 laptop in France.
 
 The final run of the two contributions entail
   - 1.1896 g CO2eq (contextual pan-tropical model)
