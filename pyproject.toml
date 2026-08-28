@@ -5,8 +5,8 @@ skip-string-normalization = false  # Normalize quote characters
 skip-magic-trailing-comma = false  # Automatically add a trailing comma when breaking long lines inside collections
 
 [tool.poetry]
-name = "paper"
-version = "0.1.0"
+name = "contextual-allometric-models"
+version = "1.0.0"
 description = ""
 authors = ["Eustache Diemert <eustache.diemert@pur.co>", "Anaëlle Dambreville <anaelle.dambreville@pur.co>"]
 readme = "README.md"
