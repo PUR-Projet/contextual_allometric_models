@@ -18,7 +18,7 @@ from baseline import Chave
 
 # SHIFTS = {
 #     "altitude": lambda x: x.Altitude < 100,
-#     "drymonths": lambda x: x.DryMonths < 4,
+#     "drymonths": lambda x: x.DryMonths < 5,
 #     "foresttype": lambda x: x.ForestType == "Dry",
 #     "rainfall": lambda x: x.Rainfall > 2500,
 #     "continent": lambda x: x.Continent == "Asia",
@@ -26,7 +26,7 @@ from baseline import Chave
 # }
 # REVERSE_SHIFTS = {
 #    "altitude ←": lambda x: x.Altitude >= 100,
-#   "drymonths ←": lambda x: x.DryMonths >= 4,
+#   "drymonths ←": lambda x: x.DryMonths >= 5,
 #    "foresttype ←": lambda x: x.ForestType != "Dry",
 #    "rainfall ←": lambda x: x.Rainfall <= 2500,
 #    "continent ←": lambda x: x.Continent != "Asia",
@@ -99,7 +99,7 @@ def determine_shifts(dff_train: pd.DataFrame):
         "altitude-low": np.quantile(dff_train["Altitude"], 0.25),
         "altitude-high": np.quantile(dff_train["Altitude"], 0.75),
         "drymonths-few": np.quantile(dff_train["DryMonths"], 0.25),
-        "drymonths-many": np.quantile(dff_train["DryMonths"], 0.75),
+        "drymonths-many": np.quantile(dff_train["DryMonths"], 0.85),  # Instead of 0.75 to avoid identical shift with foresttype-dry
         "rainfall-low": np.quantile(dff_train["Rainfall"], 0.25),
         "rainfall-high": np.quantile(dff_train["Rainfall"], 0.75),
         "foresttype-dry": "Dry",
@@ -574,9 +574,9 @@ def run_evaluation(dff_randomized):
 
     dist_data = pd.DataFrame(dist_data)
     dist_data.sort_values("Shift", inplace=True)
-    dist_data["Reference"] = dist_data["Shift"].apply(lambda x: references[x] if x in references else "-")
-    dist_data["Shift"] = dist_data["Shift"] + "→"
-    dist_data = dist_data.reindex(["Shift", "Reference", "Wass. Dist.", r"$\mathcal{H}Disc$"], axis=1)
+    dist_data["Threshold"] = dist_data["Shift"].apply(lambda x: references[x] if x in references else "-")
+    dist_data["Shift"] = dist_data["Shift"]
+    dist_data = dist_data.reindex(["Shift", "Threshold", "Wass. Dist.", r"$\mathcal{H}Disc$"], axis=1)
     dist_data.to_latex(
         f"{args.result_file}_dist.tex", index=False, formatters=[IDENTITY_FORMATER, IDENTITY_FORMATER, IDENTITY_FORMATER, DEFAULT_FORMATER]
     )
