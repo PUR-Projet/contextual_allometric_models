@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite it using the metadata from this file."
+title: "Contextualizing Pan-Tropical Allometric Models for Biomass Estimation"
+authors:
+  - given-names: Eustache
+    family-names: Diemert
+    orcid: "https://orcid.org/0000-0003-2240-501X"
+  - given-names: Anaelle
+    family-names: Dambreville
+    orcid: "https://orcid.org/0000-0003-2746-8060"
+repository-code: "https://github.com/PUR-Projet/contextual_allometric_models"
+license: CC-BY-NC-SA-4.0
